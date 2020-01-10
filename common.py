@@ -18,6 +18,39 @@ def get_nodes_by_optype(model, typename):
     return nodes
 
 
+def remove_node(model, target_node):
+    # only one input and only one output
+    # and generally, the output name and node name are the same
+    node_input = target_node.input[0]
+
+    # predecessor_node = get_node_by_name(model, node_input)
+    # node_output = target_node.output[0]
+
+    # set input of successor node to predecessor node of target node
+    # successor_node_list = []
+    for node in model.graph.node:
+        for i, n in enumerate(node.input):
+            # successor_node_list.append(node)
+            if n == target_node.name:
+                node.input[i] = node_input
+
+    weights = model.graph.initializer
+    target_names = set(target_node.input) & set([weight.name for weight in weights])
+    weights_to_be_removed = [weight for weight in weights if weight.name in target_names]
+    inputs_to_be_removed = [model_input for model_input in model.graph.input if model_input.name in target_names]
+    for weight in weights_to_be_removed:
+        print("removing weight initializer: ", weight.name)
+        weights.remove(weight)
+    for model_input in inputs_to_be_removed:
+        print("removing weight in inputs: ", model_input.name)
+        model.graph.input.remove(model_input)
+    model.graph.node.remove(target_node)
+
+
+def insert_before():
+    pass
+
+
 def get_weight_by_name(model, name):
     weights = model.graph.initializer
     for weight in weights:
@@ -112,9 +145,14 @@ if __name__ == "__main__":
     test_onnx = "raw.onnx"
     out_onnx = "new.onnx"
     model = onnx.load(test_onnx)
-    xx = get_nodes_by_optype(model, "Conv")
-    show_node_inputs(xx[10])
-    yy = get_weight_by_name(model, "conv_3b_1x1_weight")
-    show_weight(yy)
-    set_weight(yy, all_ones=True)
+
+    # xx = get_nodes_by_optype(model, "Conv")
+    # show_node_inputs(xx[10])
+    # yy = get_weight_by_name(model, "conv_3b_1x1_weight")
+    # show_weight(yy)
+    # set_weight(yy, all_ones=True)
+
+    dd = get_node_by_name(model, "bn_conv1")
+    remove_node(model, dd)
+
     onnx.save(model, out_onnx)
