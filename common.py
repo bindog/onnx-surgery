@@ -118,10 +118,11 @@ def set_weight(weight, data_numpy=None, all_ones=False, all_zeros=False):
     # NOTE: weight can be stroed in human readable fields(float_data, int32_data, string_data, ...)
     # as well as raw_data, if we set weight by raw_data, we must clear the fields above to make it effective
     if data_numpy is not None:
-        raw_shape = weight.dims
+        raw_shape = tuple([i for i in weight.dims])
         new_shape = np.shape(data_numpy)
         if new_shape != raw_shape:
             print("Warning: the new weight shape is not consistent with original shape, it may cause error!")
+            weight.dims[:] = new_shape
         weight.ClearField("float_data")
         weight.raw_data = data_numpy.tobytes()
     else:
@@ -146,13 +147,14 @@ if __name__ == "__main__":
     out_onnx = "new.onnx"
     model = onnx.load(test_onnx)
 
-    # xx = get_nodes_by_optype(model, "Conv")
-    # show_node_inputs(xx[10])
-    # yy = get_weight_by_name(model, "conv_3b_1x1_weight")
-    # show_weight(yy)
-    # set_weight(yy, all_ones=True)
+    xx = get_nodes_by_optype(model, "Conv")
+    show_node_inputs(xx[10])
+    yy = get_weight_by_name(model, "conv_3b_1x1_weight")
+    show_weight(yy)
+    test_numpy = np.zeros((64, 256, 2, 2))
+    set_weight(yy, test_numpy)
 
-    dd = get_node_by_name(model, "bn_conv1")
-    remove_node(model, dd)
+    # dd = get_node_by_name(model, "bn_conv1")
+    # remove_node(model, dd)
 
     onnx.save(model, out_onnx)
