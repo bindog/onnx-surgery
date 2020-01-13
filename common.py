@@ -1,3 +1,4 @@
+import argparse
 import onnx
 import numpy as np
 from onnx import helper
@@ -114,16 +115,45 @@ def show_weight(weight):
     print("="*40)
 
 
-def set_weight(weight, data_numpy=None, all_ones=False, all_zeros=False):
+def set_weight(model, weight, data_numpy=None, all_ones=False, all_zeros=False):
     # NOTE: weight can be stroed in human readable fields(float_data, int32_data, string_data, ...)
     # as well as raw_data, if we set weight by raw_data, we must clear the fields above to make it effective
+    # NOTE: data_type between numpy and TensorProto
     if data_numpy is not None:
         raw_shape = tuple([i for i in weight.dims])
         new_shape = np.shape(data_numpy)
+        if weight.data_type == 8:
+            # string data type is special, it requires to store data in string_data field
+            # NOT the raw_data field
+            print("Can NOT handle string data type right now...")
+            exit()
+            # weight.string_data = bytes(data_numpy, encoding = "utf8")
+            # weight.ClearField("raw_data")
         if new_shape != raw_shape:
             print("Warning: the new weight shape is not consistent with original shape, it may cause error!")
-            weight.dims[:] = new_shape
+            # new_weight = numpy_helper.from_array(data_numpy, weight.name)
+            # if new_weight.data_type != weight.data_type:
+            #     print("Warning: the new weight data type is not consistent with original data type, it may cause error!")
+            weight.dims[:] = list(new_shape)
+            for model_input in model.graph.input:
+                if model_input.name == weight.name:
+                    # print(model_input.name)
+                    # print(model_input.type.tensor_type.shape.dim)
+
+                    # new_input = helper.make_tensor_value_info(model_input.name, onnx.TensorProto.FLOAT, new_shape)
+                    # model.graph.input.remove(model_input)
+                    # model.graph.input.append(new_input)
+
+                    tensor_shape_proto = model_input.type.tensor_type.shape
+                    tensor_shape_proto.ClearField("dim")
+                    tensor_shape_proto.dim.extend([])
+                    for d in new_shape:
+                        dim = tensor_shape_proto.dim.add()
+                        dim.dim_value = d
+
         weight.ClearField("float_data")
+        weight.ClearField("int32_data")
+        weight.ClearField("int64_data")
         weight.raw_data = data_numpy.tobytes()
     else:
         if all_ones:
@@ -136,6 +166,8 @@ def set_weight(weight, data_numpy=None, all_ones=False, all_zeros=False):
             print("You must give a data_numpy to set the weight, or set the all_ones/all_zeros flag.")
             exit()
         weight.ClearField("float_data")
+        weight.ClearField("int32_data")
+        weight.ClearField("int64_data")
         weight.raw_data = wn.tobytes()
 
 
@@ -143,18 +175,21 @@ def set_weight(weight, data_numpy=None, all_ones=False, all_zeros=False):
 
 
 if __name__ == "__main__":
-    test_onnx = "raw.onnx"
-    out_onnx = "new.onnx"
-    model = onnx.load(test_onnx)
+    parser = argparse.ArgumentParser(description="onnx test")
+    parser.add_argument("--input", default="", type=str, required=True)
+    parser.add_argument("--output", default="", type=str, required=True)
+    args = parser.parse_args()
+
+    model = onnx.load(args.input)
 
     xx = get_nodes_by_optype(model, "Conv")
     show_node_inputs(xx[10])
     yy = get_weight_by_name(model, "conv_3b_1x1_weight")
     show_weight(yy)
-    test_numpy = np.zeros((64, 256, 2, 2))
-    set_weight(yy, test_numpy)
+    test_numpy = np.zeros((64, 256, 2, 2), dtype=np.float32)
+    set_weight(model, yy, test_numpy)
 
     # dd = get_node_by_name(model, "bn_conv1")
     # remove_node(model, dd)
 
-    onnx.save(model, out_onnx)
+    onnx.save(model, args.output)
