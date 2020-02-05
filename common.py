@@ -48,8 +48,24 @@ def remove_node(model, target_node):
     model.graph.node.remove(target_node)
 
 
-def insert_before():
-    pass
+def insert_flatten_before(model, target_node):
+    from onnx import TensorProto
+    print("test inserting a node...")
+    # get target_node inputs
+    node_input = target_node.input[0]
+    # create new node
+    node_name = "flatten_test"
+    flatten_output = helper.make_tensor_value_info(node_name, TensorProto.FLOAT, [8, -1])
+    flatten_node = helper.make_node('Flatten', [node_input], [node_name], name=node_name)
+    # set target_node inputs to target_node outputs
+    for node in model.graph.node:
+        for i, n in enumerate(node.input):
+            # successor_node_list.append(node)
+            if n == target_node.name:
+                node.input[i] = node_name
+    # append value proto to model graph input
+    model.graph.input.append(flatten_output)
+    print("test insert node end...")
 
 
 def get_weight_by_name(model, name):
@@ -69,9 +85,18 @@ def show_node_attributes(node):
 def show_node_inputs(node):
     # Generally, the first input is the truely input
     # and the rest input is weight initializer
-    print("="*10, "attributes of node: ", node.name, "="*10)
+    print("="*10, "inputs of node: ", node.name, "="*10)
     for input_name in node.input:
-        print(input_name)
+        print(input_name)  # type of input_name is str
+    print("="*60)
+
+
+def show_node_outputs(node):
+    # Generally, the first input is the truely input
+    # and the rest input is weight initializer
+    print("="*10, "outputs of node: ", node.name, "="*10)
+    for output_name in node.output:
+        print(output_name)  # type of output_name is str
     print("="*60)
 
 
@@ -184,6 +209,8 @@ if __name__ == "__main__":
 
     xx = get_nodes_by_optype(model, "Conv")
     show_node_inputs(xx[10])
+    insert_flatten_before(model, xx[10])
+
     yy = get_weight_by_name(model, "conv_3b_1x1_weight")
     show_weight(yy)
     test_numpy = np.zeros((64, 256, 2, 2), dtype=np.float32)
