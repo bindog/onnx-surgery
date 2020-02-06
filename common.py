@@ -57,7 +57,53 @@ def insert_flatten_before(model, target_node):
     # set target_node inputs to new node outputs
     target_node.input[0] = node_name
     model.graph.node.append(flatten_node)
-    print("test insert node end...")
+
+
+def chunk_at(model, target_node):
+    r_nodes = [target_node]
+    r_input_names = [input_n for input_n in target_node.input]
+    r_count = len(r_nodes) + len(r_input_names)
+
+    while True:
+        for node in model.graph.node:
+            if node in r_nodes:
+                continue
+            for o in node.output:
+                if o in r_input_names:
+                    r_nodes.append(node)
+                    r_input_names.extend([input_n for input_n in node.input])
+                    continue
+        n_count = len(r_nodes) + len(r_input_names)
+        if n_count == r_count:
+            break
+        r_count = n_count
+
+    d_nodes = []
+    d_inputs = []
+    d_weights = []
+    d_values = []
+    for n in model.graph.node:
+        if n not in r_nodes:
+            d_nodes.append(n)
+    for i in model.graph.input:
+        if i.name not in r_input_names:
+            d_inputs.append(i)
+    for w in model.graph.initializer:
+        if w.name not in r_input_names:
+            d_weights.append(w)
+    for v in model.graph.value_info:
+        if v.name not in r_input_names:
+            d_values.append(v)
+    for n in d_nodes:
+        model.graph.node.remove(n)
+    for i in d_inputs:
+        model.graph.input.remove(i)
+    for w in d_weights:
+        model.graph.initializer.remove(w)
+    for v in d_values:
+        model.graph.value_info.remove(v)
+
+    target_node.output[0] = model.graph.output[0].name
 
 
 def get_weight_by_name(model, name):
@@ -199,16 +245,26 @@ if __name__ == "__main__":
 
     model = onnx.load(args.input)
 
-    xx = get_nodes_by_optype(model, "Conv")
-    show_node_inputs(xx[10])
-    insert_flatten_before(model, xx[10])
+    # xx = get_nodes_by_optype(model, "Conv")
+    # show_node_inputs(xx[10])
+    # insert_flatten_before(model, xx[10])
 
-    yy = get_weight_by_name(model, "conv_3b_1x1_weight")
-    show_weight(yy)
-    test_numpy = np.zeros((64, 256, 2, 2), dtype=np.float32)
-    set_weight(model, yy, test_numpy)
+    # yy = get_weight_by_name(model, "conv_3b_1x1_weight")
+    # show_weight(yy)
+    # test_numpy = np.zeros((64, 256, 2, 2), dtype=np.float32)
+    # set_weight(model, yy, test_numpy)
 
     # dd = get_node_by_name(model, "bn_conv1")
     # remove_node(model, dd)
+
+    ins = get_nodes_by_optype(model, "InstanceNormalization")
+    print(ins[0])
+    chunk_at(model, ins[0])
+
+    # wn = "model_main.ibn1.bias"
+    # iw = get_weight_by_name(model, wn)
+    # show_weight(iw)
+    # test_numpy = np.random.rand(32).astype(np.float32)
+    # set_weight(model, iw, test_numpy)
 
     onnx.save(model, args.output)
