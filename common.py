@@ -49,22 +49,14 @@ def remove_node(model, target_node):
 
 
 def insert_flatten_before(model, target_node):
-    from onnx import TensorProto
-    print("test inserting a node...")
     # get target_node inputs
     node_input = target_node.input[0]
     # create new node
     node_name = "flatten_test"
-    flatten_output = helper.make_tensor_value_info(node_name, TensorProto.FLOAT, [8, -1])
-    flatten_node = helper.make_node('Flatten', [node_input], [node_name], name=node_name)
-    # set target_node inputs to target_node outputs
-    for node in model.graph.node:
-        for i, n in enumerate(node.input):
-            # successor_node_list.append(node)
-            if n == target_node.name:
-                node.input[i] = node_name
-    # append value proto to model graph input
-    model.graph.input.append(flatten_output)
+    flatten_node = helper.make_node('Flatten', inputs=[node_input], outputs=[node_name], name=node_name)
+    # set target_node inputs to new node outputs
+    target_node.input[0] = node_name
+    model.graph.node.append(flatten_node)
     print("test insert node end...")
 
 
