@@ -1,7 +1,9 @@
+import functools
 import onnx
 import numpy as np
 from onnx import helper
 from onnx import numpy_helper
+
 
 class Surgery(object):
     def __init__(self, onnx_model_path):
@@ -49,11 +51,10 @@ class Surgery(object):
 
         target_names = set(target_node.input) & set([weight.name for weight in self.model.graph.initializer])
         self.remove_weights(target_names)
-        target_names.append(node_output)
+        target_names.add(node_output)
         self.remove_inputs(target_names)
         self.remove_value_infos(target_names)
         self.model.graph.node.remove(target_node)
-
 
     def remove_weights(self, name_list):
         rm_list = []
@@ -62,7 +63,6 @@ class Surgery(object):
                 rm_list.append(weight)
         for weight in rm_list:
             self.model.graph.initializer.remove(weight)
-
 
     def remove_inputs(self, name_list):
         rm_list = []
@@ -126,10 +126,9 @@ class Surgery(object):
             weight.ClearField("int64_data")
             weight.raw_data = wn.tobytes()
 
-    def set_node_attribute_by_name(self, node_name, attr_name, attr_value):
-        node = self.get_node_by_name(node_name)
+    def set_node_attribute(self, target_node, attr_name, attr_value):
         flag = False
-        for attr in node.attribute:
+        for attr in target_node.attribute:
             if (attr.name == attr_name):
                 if attr.type == 1:
                     attr.f = attr_value
@@ -155,3 +154,69 @@ class Surgery(object):
                     return False
                 flag = True
         return flag
+
+    def chunk_at(self, target_node):
+        r_nodes = [target_node]
+        r_input_names = [input_n for input_n in target_node.input]
+        r_count = len(r_nodes) + len(r_input_names)
+
+        while True:
+            for node in self.model.graph.node:
+                # print("nn", node.output)
+                if node in r_nodes:
+                    continue
+                for o in node.output:
+                    if o in r_input_names:
+                        r_nodes.append(node)
+                        r_input_names.extend([input_n for input_n in node.input])
+                        continue
+            n_count = len(r_nodes) + len(r_input_names)
+            if n_count == r_count:
+                break
+            r_count = n_count
+
+        print("debug r count", r_count)
+
+        d_nodes = []
+        d_inputs = []
+        d_weights = []
+        d_value_infos = []
+        for node in self.model.graph.node:
+            if node not in r_nodes:
+                d_nodes.append(node)
+        for model_input in self.model.graph.input:
+            if model_input.name not in r_input_names:
+                d_inputs.append(model_input)
+        for weight in self.model.graph.initializer:
+            if weight.name not in r_input_names:
+                d_weights.append(weight)
+        for value_info in self.model.graph.value_info:
+            if value_info.name not in r_input_names:
+                d_values.append(value_info)
+        for node in d_nodes:
+            self.model.graph.node.remove(node)
+        for model_input in d_inputs:
+            self.model.graph.input.remove(model_input)
+        for weight in d_weights:
+            self.model.graph.initializer.remove(weight)
+        for value_info in d_value_infos:
+            self.model.graph.value_info.remove(value_info)
+
+        target_node.output[0] = self.model.graph.output[0].name
+        # remove other outputs if model has multi-output
+        d_outputs = []
+        for i, output in enumerate(self.model.graph.output):
+            if i != 0 :
+                d_outputs.append(output)
+        for output in d_outputs:
+            self.model.graph.output.remove(output)
+
+    def insert_flatten_before(self, target_node):
+        # get target_node inputs
+        node_input = target_node.input[0]
+        # create new node
+        node_name = "flatten_test"
+        flatten_node = helper.make_node('Flatten', inputs=[node_input], outputs=[node_name], name=node_name)
+        # set target_node inputs to new node outputs
+        target_node.input[0] = node_name
+        self.model.graph.node.append(flatten_node)
