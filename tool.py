@@ -1,7 +1,4 @@
-import argparse
 from onnx import numpy_helper
-
-from surgery import Surgery
 
 
 def show_node_attributes(node):
@@ -41,15 +38,3 @@ def show_weight(weight):
 
 # TODO elementwise op (Div Sub ...) constant
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="onnx test")
-    parser.add_argument("--input", default="", type=str, required=True)
-    parser.add_argument("--output", default="", type=str, required=True)
-    args = parser.parse_args()
-
-    onnxsu = Surgery(args.input)
-    onnxsu.set_weight_by_name("model_main.model.layer1.0.conv1.weight", all_zeros=True)
-    xx = onnxsu.get_nodes_by_optype("BatchNormalization")
-    onnxsu.set_node_attribute(xx[0], "epsilon", 1e-3)
-    onnxsu.export(args.output)
