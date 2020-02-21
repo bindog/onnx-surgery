@@ -30,6 +30,16 @@ def tf_without_batch_size(onnxsu, batch_size=8):
     onnxsu.set_model_input_batch_size(batch_size=batch_size)
 
 
+def debug_internal_output(onnxsu, node_name, output_name):
+    # NOTE
+    # sometimes we hope to get the internal result of some node for debug,
+    # but onnx do NOT have the API to support this function. Don't worry,
+    # we can append an Identity OP and an extra output following the target
+    # node to get the result we want
+    node = onnxsu.get_node_by_name(node_name)
+    onnxsu.add_extra_output(node, output_name)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="onnx test")
     parser.add_argument("--input", default="", type=str, required=True)
@@ -38,7 +48,8 @@ if __name__ == "__main__":
 
     onnxsu = Surgery(args.input)
 
-    old_mxnet_version_example(onnxsu)
+    # old_mxnet_version_example(onnxsu)
     # tf_without_batch_size(onnxsu, 16)
+    debug_internal_output(onnxsu, "your target node name", "debug_test")
 
     onnxsu.export(args.output)

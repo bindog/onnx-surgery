@@ -1,0 +1,12 @@
+temp/
+__pycache__/
+*.py[cod]
+*$py.class
+*.swp
+*.ipynb
+*.ipynb_checkpoints
+*.log
+*.so
+*.sh
+*.pt
+*.onnx
