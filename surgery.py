@@ -12,6 +12,87 @@ class Surgery(object):
     def export(self, file_name):
         onnx.save(self.model, file_name)
 
+    def list_model_inputs(self, nums):
+        count = 0
+        for mi in self.model.graph.input:
+            print(mi)
+            '''
+            # NOTE:
+            # the shape or dim in tensor is something like this below
+            # it is just a list of {}, both dim_param and dim_value are optional
+
+		shape {
+		  dim {
+		    dim_param: "batch_size"
+                    dim_value: 32
+		  }
+		  dim {
+                    dim_param: "channel"
+		    dim_value: 3
+		  }
+		  dim {
+                    dim_param: "height"
+		    dim_value: 224
+		  }
+		  dim {
+                    dim_param: "weight"
+		    dim_value: 224
+		  }
+		}
+
+            # we can access them like this
+            # tensor_dim = model_input.type.tensor_type.shape.dim
+            # print(tensor_dim[0].dim_param)
+            # print(tensor_dim[0].dim_param)
+            # print(tensor_dim[x].dim_param)
+            # print(tensor_dim[x].dim_value)
+            '''
+            count += 1
+            if count == nums:
+                break
+
+    def set_model_input_batch_size(self, index=0, name=None, batch_size=8):
+        model_input = None
+        if name is not None:
+            # get model input by its name
+            for mi in self.model.graph.input:
+                if mi.name == name:
+                    model_input = mi
+        else:
+            model_input = self.model.graph.input[index]
+
+        if model_input:
+            model_input = self.model.graph.input[index]
+            tensor_dim = model_input.type.tensor_type.shape.dim
+            tensor_dim[0].ClearField("dim_param")
+            tensor_dim[0].dim_value = batch_size
+        else:
+            print("get model input error, check your index or name")
+
+    def set_model_input_shape(self, index=0, name=None, shape=None):
+        model_input = None
+        if name is not None:
+            # get model input by its name
+            for mi in self.model.graph.input:
+                if mi.name == name:
+                    model_input = mi
+        else:
+            model_input = self.model.graph.input[index]
+
+        if model_input:
+            if shape is not None:
+                model_input = self.model.graph.input[index]
+                tensor_shape_proto = model_input.type.tensor_type.shape
+                tensor_shape_proto.ClearField("dim")
+                tensor_shape_proto.dim.extend([])
+                for d in shape:
+                    dim = tensor_shape_proto.dim.add()
+                    dim.dim_value = d
+            else:
+                print("input shape must be set")
+        else:
+            print("get model input error, check your index or name")
+
     def get_node_by_name(self, name):
         for node in self.model.graph.node:
             if node.name == name:
@@ -150,9 +231,15 @@ class Surgery(object):
                 elif attr.type == 8:
                     attr.strings[:] = attr_value
                 else:
-                    print("unsupported attribute data type right now...")
+                    print("unsupported attribute data type with attribute name")
                     return False
                 flag = True
+
+        if not flag:
+            # attribute not in original node
+            print("Warning: you are appending a new attribute to the node!")
+            target_node.attribute.append(helper.make_attribute(attr_name, attr_value))
+            flag = True
         return flag
 
     def chunk_at(self, target_node):
