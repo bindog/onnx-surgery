@@ -21,7 +21,7 @@ def old_mxnet_version_example(onnxsu):
         onnxsu.set_node_attribute(avg_node, "count_include_pad", 1)
 
 
-def tf_without_batch_size(onnxsu, batch_size=8):
+def tf_set_batch_size_example(onnxsu, batch_size=8):
     # NOTE
     # when using tf2onnx convert the tensorflow pb model to onnx
     # the input batch_size dim is not set, we can append it
@@ -40,6 +40,20 @@ def debug_internal_output(onnxsu, node_name, output_name):
     onnxsu.add_extra_output(node, output_name)
 
 
+def tensorrt_set_epsilon_example(onnxsu, epsilon=1e-3):
+    # NOTE
+    # We found when converting an onnx model with InstanceNormalization OP to TensorRT engine, the inference result is inaccurate
+    # you can find the details at https://devtalk.nvidia.com/default/topic/1071094/tensorrt/inference-result-inaccurate-with-conv-and-instancenormalization-under-certain-conditions/
+    # After days of debugging, and we finally find this issue is caused by the following line of code
+    # https://github.com/onnx/onnx-tensorrt/blob/5dca8737851118f6ab8a33ea1f7bcb7c9f06caf5/builtin_op_importers.cpp#L1557
+    # it is strange that TensorRT onnx parser only supports epsilon >= 1e-4, if you do NOT
+    # want to re-compile the TensorRT OSS, you can change epsilon to 1e-3 manually...
+    # I tried comment out that line, it worked but the error is bigger than setting epsilon to 1e-3
+    in_nodes = onnxsu.get_nodes_by_optype("InstanceNormalization")
+    for in_node in in_nodes:
+        onnxsu.set_node_attribute(in_node, "epsilon", epsilon)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="onnx test")
     parser.add_argument("--input", default="", type=str, required=True)
@@ -49,7 +63,8 @@ if __name__ == "__main__":
     onnxsu = Surgery(args.input)
 
     # old_mxnet_version_example(onnxsu)
-    # tf_without_batch_size(onnxsu, 16)
-    debug_internal_output(onnxsu, "your target node name", "debug_test")
+    # tf_set_batch_size_example(onnxsu, 16)
+    # debug_internal_output(onnxsu, "your target node name", "debug_test")
+    tensorrt_set_epsilon_example(onnxsu, 1e-3)
 
     onnxsu.export(args.output)
