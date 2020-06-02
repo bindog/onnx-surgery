@@ -1,4 +1,6 @@
 import argparse
+import numpy as np
+
 from onnx import numpy_helper
 
 from surgery import Surgery
@@ -54,6 +56,33 @@ def tensorrt_set_epsilon_example(onnxsu, epsilon=1e-3):
         onnxsu.set_node_attribute(in_node, "epsilon", epsilon)
 
 
+def add_conv_layer(onnxsu, target_node_name):
+    # NOTE:
+    # The name, attribute and weight of the OP can be found at:
+    # https://github.com/onnx/onnx/blob/master/docs/Operators.md
+    # You must convert all your weight and attribute to the standard
+    # of the ONNX to avoid unexpected error
+    target_node = onnxsu.get_node_by_name(target_node_name)
+    # NOTE:
+    # the weight name better be complicated enough to avoid conflict,
+    # And weight_dict must be in order (make sure your python version >= 3.6)
+    weight_dict = {
+        "W_from_a_new_conv_op": np.random.normal(0, 1, (64, 64, 3, 3)).astype(np.float32),
+        "B_from_a_new_conv_op": np.random.normal(0, 1, (64,)).astype(np.float32)
+    }
+    attr_dict = {
+        "kernel_shape": [3, 3],
+        "pads": [0, 0, 0, 0]
+    }
+    onnxsu.insert_op_before(
+                    node_name="new_conv_op",
+                    target_node=target_node,
+                    op_name="Conv",
+                    weight_dict=weight_dict,
+                    attr_dict=attr_dict
+                )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="onnx test")
     parser.add_argument("--input", default="", type=str, required=True)
@@ -65,6 +94,7 @@ if __name__ == "__main__":
     # old_mxnet_version_example(onnxsu)
     # tf_set_batch_size_example(onnxsu, 16)
     # debug_internal_output(onnxsu, "your target node name", "debug_test")
-    tensorrt_set_epsilon_example(onnxsu, 1e-3)
+    # tensorrt_set_epsilon_example(onnxsu, 1e-3)
+    add_conv_layer(onnxsu, "resnetv24_batchnorm1_fwd")
 
     onnxsu.export(args.output)

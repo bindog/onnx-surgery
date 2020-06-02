@@ -10,6 +10,8 @@ class Surgery(object):
         self.model = onnx.load(onnx_model_path)
 
     def export(self, file_name):
+        # self.model = onnx.shape_inference.infer_shapes(self.model)
+        # onnx.checker.check_model(self.model)
         onnx.save(self.model, file_name)
 
     def list_model_inputs(self, nums):
@@ -308,6 +310,59 @@ class Surgery(object):
         target_node.input[0] = node_name
         self.model.graph.node.append(flatten_node)
 
+    def insert_op_before(self, node_name, target_node, input_idx=0, *args, **kwargs):
+        '''
+        op_name
+        weight_dict
+        attr_dict
+        ......
+
+        NOTE:
+        you must ensure the output shape match the input shape of target_node
+        '''
+        # get target_node inputs
+        node_input = target_node.input[input_idx]
+        weight_input = []
+        weight_input_vi = []
+        weight_initializer = []
+        if "weight_dict" in kwargs:
+            for weight_name, weight_numpy in kwargs["weight_dict"].items():
+                weight_input.append(weight_name)
+                weight_input_vi.append(
+                        helper.make_tensor_value_info(
+                            name=weight_name,
+                            elem_type=onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[weight_numpy.dtype],
+                            shape=weight_numpy.shape
+                        )
+                )
+                weight_initializer.append(
+                    helper.make_tensor(
+                            name=weight_name,
+                            data_type=onnx.mapping.NP_TYPE_TO_TENSOR_TYPE[weight_numpy.dtype],
+                            dims=weight_numpy.shape,
+                            vals=weight_numpy.tobytes(),
+                            raw=True
+                    )
+                )
+        # create new node
+        new_op_node = helper.make_node(
+                                kwargs["op_name"],
+                                inputs=[node_input, *weight_input],
+                                outputs=[node_name],
+                                name=node_name,
+                                **kwargs["attr_dict"]
+                            )
+        # set target_node input to new node outputs
+        target_node.input[input_idx] = node_name
+        # TODO: change other nodes input into the new node?
+        # iterator all the nodes in the graph and find
+        # which node's input equals the original target_node input
+        # ...
+        # add new node and weight input into the graph
+        self.model.graph.node.append(new_op_node)
+        self.model.graph.input.extend(weight_input_vi)
+        self.model.graph.initializer.extend(weight_initializer)
+
     def add_extra_output(self, target_node, output_name):
         extra_output = helper.make_empty_tensor_value_info(output_name)
         '''
@@ -325,4 +380,3 @@ class Surgery(object):
         identity_node = helper.make_node('Identity', inputs=[target_output], outputs=[output_name], name=output_name)
         self.model.graph.node.append(identity_node)
         self.model.graph.output.append(extra_output)
-
