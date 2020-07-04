@@ -9,9 +9,10 @@ class Surgery(object):
     def __init__(self, onnx_model_path):
         self.model = onnx.load(onnx_model_path)
 
-    def export(self, file_name):
-        # self.model = onnx.shape_inference.infer_shapes(self.model)
-        # onnx.checker.check_model(self.model)
+    def export(self, file_name, infer_shapes=False):
+        if infer_shapes:
+            self.model = onnx.shape_inference.infer_shapes(self.model)
+        onnx.checker.check_model(self.model)
         onnx.save(self.model, file_name)
 
     def list_model_inputs(self, nums):
@@ -308,7 +309,10 @@ class Surgery(object):
         flatten_node = helper.make_node('Flatten', inputs=[node_input], outputs=[node_name], name=node_name)
         # set target_node inputs to new node outputs
         target_node.input[0] = node_name
-        self.model.graph.node.append(flatten_node)
+        for target_node_index, _target_node in enumerate(self.model.graph.node):
+            if _target_node == target_node:
+                self.model.graph.node.insert(target_node_index, flatten_node)
+                break
 
     def insert_op_before(self, node_name, target_node, input_idx=0, *args, **kwargs):
         '''
@@ -359,7 +363,10 @@ class Surgery(object):
         # which node's input equals the original target_node input
         # ...
         # add new node and weight input into the graph
-        self.model.graph.node.append(new_op_node)
+        for target_node_index, _target_node in enumerate(self.model.graph.node):
+            if _target_node == target_node:
+                self.model.graph.node.insert(target_node_index, new_op_node)
+                break
         self.model.graph.input.extend(weight_input_vi)
         self.model.graph.initializer.extend(weight_initializer)
 
