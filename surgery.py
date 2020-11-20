@@ -8,11 +8,13 @@ from onnx import numpy_helper
 class Surgery(object):
     def __init__(self, onnx_model_path):
         self.model = onnx.load(onnx_model_path)
+        self.model = onnx.shape_inference.infer_shapes(self.model)
 
     def export(self, file_name, infer_shapes=False):
         if infer_shapes:
             self.model = onnx.shape_inference.infer_shapes(self.model)
         onnx.checker.check_model(self.model)
+        self.model = onnx.shape_inference.infer_shapes(self.model)
         onnx.save(self.model, file_name)
 
     def list_model_inputs(self, nums):
@@ -371,7 +373,18 @@ class Surgery(object):
         self.model.graph.initializer.extend(weight_initializer)
 
     def add_extra_output(self, target_node, output_name):
-        extra_output = helper.make_empty_tensor_value_info(output_name)
+        target_output = target_node.output[0]
+        extra_shape = []
+        for vi in self.model.graph.value_info:
+            if vi.name == target_output:
+                extra_elem_type = vi.type.tensor_type.elem_type
+                for s in vi.type.tensor_type.shape.dim:
+                    extra_shape.append(s.dim_value)
+        extra_output = helper.make_tensor_value_info(
+                                output_name,
+                                extra_elem_type,
+                                extra_shape
+                            )
         '''
             # NOTE
             # if we know the value type and shape, we can alse use this
@@ -383,7 +396,6 @@ class Surgery(object):
 		    shape_denotation=None,  # type: Optional[List[Text]]
 	    ):
         '''
-        target_output = target_node.output[0]
         identity_node = helper.make_node('Identity', inputs=[target_output], outputs=[output_name], name=output_name)
         self.model.graph.node.append(identity_node)
         self.model.graph.output.append(extra_output)
